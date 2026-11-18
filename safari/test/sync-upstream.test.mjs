@@ -188,6 +188,14 @@ const entry = { args };
 const bodyFile = args.indexOf('--body-file');
 if (bodyFile >= 0) entry.body = fs.readFileSync(args[bodyFile + 1], 'utf8');
 fs.appendFileSync(process.env.GH_FAKE_LOG, JSON.stringify(entry) + '\\n');
+if (args[0] === 'issue' && args[1] === 'list' && process.env.GH_FAKE_ISSUES_OFF) {
+  process.stderr.write("the 'owner/repo' repository has disabled issues\\n");
+  process.exit(1);
+}
+if (args[0] === 'issue' && args[1] === 'list' && process.env.GH_FAKE_LIST_ERROR) {
+  process.stderr.write('HTTP 502: Bad Gateway\\n');
+  process.exit(1);
+}
 if (args[0] === 'issue' && args[1] === 'list') {
   const jq = args.indexOf('--jq');
   process.stdout.write(execFileSync('jq', ['-r', jq >= 0 ? args[jq + 1] : '.', process.env.GH_FAKE_ISSUES], { encoding: 'utf8' }));
@@ -199,8 +207,9 @@ let stepCount = 0;
 // Runs one of the scripts; returns its exit status, output, GITHUB_OUTPUT values and the gh calls.
 function step(script, dir, env, issues = []) {
   const id = ++stepCount;
-  const files = { out: path.join(tmp, `output-${id}`), log: path.join(tmp, `gh-${id}.log`), issues: path.join(tmp, `issues-${id}.json`) };
+  const files = { out: path.join(tmp, `output-${id}`), log: path.join(tmp, `gh-${id}.log`), issues: path.join(tmp, `issues-${id}.json`), summary: path.join(tmp, `summary-${id}.md`) };
   fs.writeFileSync(files.out, '');
+  fs.writeFileSync(files.summary, '');
   fs.writeFileSync(files.log, '');
   fs.writeFileSync(files.issues, JSON.stringify(issues));
   const res = spawnSync('bash', [path.join(repoRoot, 'tools', 'ci', script)], {
@@ -209,6 +218,7 @@ function step(script, dir, env, issues = []) {
     env: {
       PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`, HOME: tmp, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
       GITHUB_OUTPUT: files.out, RUNNER_TEMP: tmp, GH_FAKE_LOG: files.log, GH_FAKE_ISSUES: files.issues,
+      GITHUB_STEP_SUMMARY: files.summary,
       CANDIDATE_BRANCH: 'upstream-sync', ISSUE_LABEL: 'upstream-sync', GITHUB_REPOSITORY_OWNER: 'owner', ...env,
     },
   });
@@ -217,6 +227,7 @@ function step(script, dir, env, issues = []) {
     text: res.stdout + res.stderr,
     outputs: Object.fromEntries(fs.readFileSync(files.out, 'utf8').split('\n').filter(Boolean).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)])),
     gh: fs.readFileSync(files.log, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)),
+    summary: fs.readFileSync(files.summary, 'utf8'),
   };
 }
 
@@ -276,6 +287,19 @@ test('workflow steps: a new release goes to the candidate branch and, once accep
   assert.equal(res.outputs.proceed, 'true');
   const first = res.outputs.sha;
   assert.equal(remote('rev-parse', 'upstream-sync'), first);
+
+  // Issues turned off (as in a new fork): nothing is on record, the scheduled run goes on.
+  job = staged();
+  res = step('candidate.sh', job.dir, { ...job.env, GITHUB_EVENT_NAME: 'schedule', GH_FAKE_ISSUES_OFF: '1' }, reported);
+  assert.equal(res.status, 0, res.text);
+  assert.equal(res.outputs.proceed, 'true');
+  assert.match(res.text, /Issues are turned off/);
+  // Any other error of gh still stops it.
+  job = staged();
+  res = step('candidate.sh', job.dir, { ...job.env, GITHUB_EVENT_NAME: 'schedule', GH_FAKE_LIST_ERROR: '1' }, reported);
+  assert.notEqual(res.status, 0);
+  assert.match(res.text, /HTTP 502/);
+  assert.deepEqual(res.outputs, {});
 
   // A run started by hand tries again whatever is on record, and replaces the candidate.
   job = staged();
@@ -405,4 +429,36 @@ test('workflow steps: the issue about a failed sync is opened, updated and close
   assert.equal(res.status, 0, res.text);
   assert.deepEqual(res.gh.slice(1).map((c) => c.args.slice(0, 3).join(' ')), ['issue edit 7', 'issue comment 7']);
   assert.match(res.gh[1].body, /\| 合入 main \| failure \|/);
+});
+
+test('workflow steps: with Issues turned off, a failed sync is in the summary of the run, which fails', { skip: haveTools ? false : 'bash, jq, zip or unzip is missing' }, () => {
+  const sha = 'a'.repeat(40), base = 'b'.repeat(40), upstream = 'c'.repeat(40);
+  const env = { VERSION: '3.0.1', UPSTREAM: upstream, BASE: base, SHA: sha, RUN_URL: 'https://github.example/run/1', FAILURES: '', GH_FAKE_ISSUES_OFF: '1' };
+  const calls = (res) => res.gh.map((c) => c.args.slice(0, 2).join(' '));
+
+  // Nothing new upstream (as the first job calls it): nothing to close, the step passes.
+  let res = step('report.sh', tmp, { CHANGED: 'false', PROMOTE: 'skipped', VERSION: '3.0.1', RUN_URL: env.RUN_URL, GH_FAKE_ISSUES_OFF: '1' });
+  assert.equal(res.status, 0, res.text);
+  assert.deepEqual(calls(res), ['issue list']);
+  assert.equal(res.summary, '');
+  // The release was accepted: the same.
+  res = step('report.sh', tmp, { ...env, CHANGED: 'true', PROCEED: 'true', TEST: 'success', ENGINE: 'success', PROMOTE: 'success' });
+  assert.equal(res.status, 0, res.text);
+  assert.deepEqual(calls(res), ['issue list']);
+  // A failure: no issue, the report goes to the summary and the step fails.
+  res = step('report.sh', tmp, { ...env, CHANGED: 'true', PROCEED: 'true', TEST: 'failure', ENGINE: 'skipped', PROMOTE: 'skipped', FAILURES: 'build failed: sites.js: expected 1 match(es), found 0' });
+  assert.equal(res.status, 1, res.text);
+  assert.deepEqual(calls(res), ['issue list']);
+  assert.match(res.text, /::error::上游同步失败：3\.0\.1/);
+  assert.match(res.summary, /^## 上游同步失败：3\.0\.1\n/);
+  assert.match(res.summary, /关闭了 Issues/);
+  assert.match(res.summary, /\| 构建和 Node 测试 \| failure \|/);
+  assert.match(res.summary, /expected 1 match\(es\), found 0/);
+  assert.match(res.summary, /https:\/\/github\.example\/run\/1/);
+  assert.ok(!res.summary.includes('<!--'));
+  // Any other error of gh still stops the step, without a report.
+  res = step('report.sh', tmp, { ...env, GH_FAKE_ISSUES_OFF: '', GH_FAKE_LIST_ERROR: '1', CHANGED: 'true', PROCEED: 'true', TEST: 'failure', ENGINE: 'skipped', PROMOTE: 'skipped' });
+  assert.notEqual(res.status, 0);
+  assert.match(res.text, /HTTP 502/);
+  assert.equal(res.summary, '');
 });
