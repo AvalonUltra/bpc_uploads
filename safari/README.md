@@ -201,7 +201,7 @@ node --test --test-concurrency=1 safari/test/*.test.mjs
 - 旧版本留下的站点列表（乱码的名称、被停用的站点）会被修正，用户自己精简过的列表保持不变；
 - 注入网页环境的脚本在没有 `chrome` 对象的页面里能正常启动；
 - 诊断页在「没有网站权限」「一切正常」「后台没有响应」等情况下给出正确的结论。
-- 上游同步（`sync-upstream.test.mjs`，用临时的 git 仓库模拟上游和 GitHub 上的仓库）：只拿发布文件，上游里的工作流、脚本、符号链接都进不来；不像发布包的上游会被拒绝；「Upstream sync」工作流的各个步骤照实际的方式运行，包括候选提交里混进了别的文件、或者 `main` 在测试期间变了时拒绝推送，以及 issue 的开、更新和关闭；
+- 上游同步（`sync-upstream.test.mjs`，用临时的 git 仓库模拟上游和 GitHub 上的仓库）：只拿发布文件，上游里的工作流、脚本、符号链接都进不来；不像发布包的上游会被拒绝；「Upstream sync」工作流的各个步骤照实际的方式运行，包括候选提交里混进了别的文件、或者 `main` 在测试期间变了时拒绝推送，以及 issue 的开、更新和关闭（仓库关闭了 Issues 时改写到运行摘要里，并让这次运行失败）；
 - Chrome 修正版和上游原版相比只改了 `sites.js` 和版本名（`chrome-build.test.mjs`）。
 
 `safari/test/webkit-rules.mjs` 是根据 Apple 文档、MDN 兼容性数据、WebKit 源码和引擎测试的结果整理出的**近似**模型，故意定得偏严。真实 Safari 运行时会用自己的 `isRegexSupported()` 再判断一次。
@@ -257,6 +257,8 @@ WebDriver 只能看到网页，看不到扩展内部，所以这里检查的都�
 
 任何一步失败，`main` 都不会被改动，工作流会开一个带 `upstream-sync` 标签的 issue，写明失败的步骤和运行记录。最常见的原因是上游改了代码，`safari/build.mjs` 里的某个补丁对不上了；改好补丁并合入 `main` 之后，下一次定时运行会自动重试，成功后 issue 自动关闭。同一个上游版本在同一个 `main` 上失败过一次，定时运行就不会再试（避免每天白跑两次），手动运行不受这个限制。
 
+**fork 里先打开 Issues**：GitHub 新建的 fork 默认关闭 Issues（Settings → General → Features → Issues）。关闭时同步照常进行，只是失败没法记在 issue 里：工作流会把失败的步骤和原因写在这次运行的摘要（Summary）里，并把这次运行标成失败，GitHub 会照常通知仓库所有者；而且因为没有 issue 记录，定时运行每次都会重试同一个失败的版本。所以建议打开 Issues。
+
 其他说明：
 
 - **手动运行**：Actions 页面 → Upstream sync → Run workflow。勾选 rehearsal 时，即使上游没有新版本，也会用一个空提交把所有步骤走一遍，用来检查工作流本身。
@@ -291,6 +293,6 @@ git commit -F /tmp/sync-message.txt
 - `xcode/convert.sh`、`xcode/set-version.mjs`、`xcode/build-app.sh`、`xcode/make-ipa.sh`：生成 Xcode 工程、写入版本号、构建应用、打包未签名 ipa（CI 也调用这些脚本）
 - `test/`：模拟环境里的测试（`harness.mjs` 模拟浏览器 API，`webkit-rules.mjs` 是 Safari 规则模型，`sampler.mjs` 做正则等价性采样）
 - `engine/`：真实 WebKit 引擎和 Safari 应用里的测试（`host.m` 是加载扩展的宿主程序，`server.mjs` 是本地替身网站，`run.sh` 运行引擎测试的全部场景，`safari-app.sh` 和 `safari-app.mjs` 驱动 Safari 应用，`report.mjs` 汇总并检查结果）
-- `../tools/sync-upstream.mjs`：同步上游的发布文件；`../tools/ci/*.sh`：「Upstream sync」工作流里提交候选、推到 `main`、开关 issue 的步骤；`../tools/release-notes.mjs`：生成 Releases 页面上的说明
+- `../tools/sync-upstream.mjs`：同步上游的发布文件；`../tools/ci/*.sh`：「Upstream sync」工作流里提交候选、推到 `main`、开关 issue 的步骤（`issues.sh` 让它们在关闭了 Issues 的仓库里也能运行）；`../tools/release-notes.mjs`：生成 Releases 页面上的说明
 - `../chrome/build.mjs`：给上游的 Chrome 包加上同样的网站修正
 - `../.github/workflows/`：`safari.yml`（构建、测试、打包、发布）、`safari-engine.yml`（引擎测试）、`upstream-sync.yml`（自动同步上游）

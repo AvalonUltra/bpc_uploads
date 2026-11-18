@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # The last step of .github/workflows/upstream-sync.yml: closes the issue about
 # a failed sync when main has upstream's release, and opens or updates it when
-# this run failed.
+# this run failed. Where the repository has Issues turned off, a failure is
+# written to the summary of the run instead, and this step fails, so that the
+# run is marked as failed and GitHub tells the owner.
 #
 # Environment:
 #   CHANGED            "true" when upstream had a release that main has not
@@ -13,13 +15,15 @@
 #   UPSTREAM, BASE, SHA     what was tried
 #   FAILURES           lines of the test job about what failed (may be empty)
 #   CANDIDATE_BRANCH, ISSUE_LABEL, GITHUB_REPOSITORY_OWNER, RUNNER_TEMP,
-#   and for gh: GH_TOKEN, GH_REPO
+#   GITHUB_STEP_SUMMARY, and for gh: GH_TOKEN, GH_REPO
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/issues.sh"
 
 # The first job calls this with the first few of these only, when upstream has nothing new.
 : "${PROCEED:=}" "${TEST:=}" "${ENGINE:=}" "${PROMOTE:=}" "${UPSTREAM:=}" "${BASE:=}" "${SHA:=}" "${FAILURES:=}"
 
-open=$(gh issue list --state open --label "$ISSUE_LABEL" --json number --jq '.[].number')
+list_issues --state open --label "$ISSUE_LABEL" --json number --jq '.[].number'
+open=$ISSUES
 
 # main has upstream's current release: what failed before is over.
 if { [ "$CHANGED" = false ] && [ "$PROCEED" != true ]; } || [ "$PROMOTE" = success ]; then
@@ -61,6 +65,17 @@ body="$RUNNER_TEMP/upstream-sync-issue.md"
 } > "$body"
 
 title="上游同步失败：$VERSION"
+if [ "$ISSUES_OFF" = true ]; then
+  {
+    echo "## $title"
+    echo
+    echo "> 这个仓库关闭了 Issues，所以失败写在这里。打开 Settings → General → Features → Issues 后，失败会记在带 \`$ISSUE_LABEL\` 标签的 issue 里。"
+    echo
+    grep -v '^<!-- upstream=' "$body"
+  } >> "${GITHUB_STEP_SUMMARY:-/dev/stderr}"
+  echo "::error::$title. The repository has Issues turned off; the report is in the summary of this run: $RUN_URL"
+  exit 1
+fi
 first=$(printf '%s\n' "$open" | head -1)
 if [ -n "$first" ]; then
   gh issue edit "$first" --title "$title" --body-file "$body"

@@ -1,22 +1,22 @@
 SHA256 hash of bypass-paywalls-chrome-clean-4.4.9.0.crx:
 3ddd914ff8071947ffc91cba8307dda8163fe0d4802cb710afffdf8e1b9b731b
-SHA256 hash of bypass-paywalls-chrome-clean-4.4.9.5.crx:
-736b10912e3187694d61d1fcfe22cc6f1514bd365b7e6ed7badb662f8b929021
+SHA256 hash of bypass-paywalls-chrome-clean-4.4.9.6.crx:
+7d582f27c6f1e588997ca2528c1ef68d6028ca611b6eefc82a948164ac15df5c
 SHA256 hash of bypass-paywalls-chrome-clean-android-custom.crx:
 f58da9feee071611d71959b7926892c27929653a745f2216140a0b85bf72a458
 SHA256 hash of bypass-paywalls-chrome-clean-latest.crx:
-736b10912e3187694d61d1fcfe22cc6f1514bd365b7e6ed7badb662f8b929021
+7d582f27c6f1e588997ca2528c1ef68d6028ca611b6eefc82a948164ac15df5c
 SHA256 hash of bypass-paywalls-chrome-clean-master.zip:
-02c0e6e1438c2eae360331064698d96d2a5aff869b97cfc57541d91521095b5a
+d4193989e9ec81cff1d4555edb99ccb403a066281c11d4b8eab37788d0e9e6de
 SHA256 hash of bypass-paywalls-firefox-clean-master.zip:
-062c6d6660b8bac68ce3d208cd344f113671e3d12b7d10d6d8d22b8ba04bb80a
+28bd20ca3849142567511c86be29dd8e55f6931a08411ea7fe5decff99c1b713
 SHA256 hash of bypass_paywalls_clean-4.4.9.0-custom.xpi:
 b24ae46df86afe48f8a7cd1aee9d0c0df8c416779cdb583e51b05bb740a79803
 SHA256 hash of bypass_paywalls_clean-4.4.9.0.xpi:
 c5d901dd41b0648edac0b5ce877cd3e2cba51ff1732f37206eba4dc7fa2acd30
-SHA256 hash of bypass_paywalls_clean-4.4.9.5-custom.xpi:
-8ac57237e89515edbc35c07ebae67d1d0ef66d679e22bb8d965a5ae4b5989bc1
-SHA256 hash of bypass_paywalls_clean-4.4.9.5.xpi:
-b1caade865c00a0eab5243f1397d9bd7c208ab78a249b634544ed4c24cdf5dcd
+SHA256 hash of bypass_paywalls_clean-4.4.9.6-custom.xpi:
+4503a41f6bf6f4f21eccbdebe0db726340d8f7a720c25d390142e88debf6d965
+SHA256 hash of bypass_paywalls_clean-4.4.9.6.xpi:
+0d0b9c627eb5085c16a263f61415c5706428ce7ba259566d0d50c4ac7e096dac
 SHA256 hash of bypass_paywalls_clean-latest.xpi:
 b1caade865c00a0eab5243f1397d9bd7c208ab78a249b634544ed4c24cdf5dcd
